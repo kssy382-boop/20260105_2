@@ -1,342 +1,59 @@
-<!doctype html>
-<html lang="ko">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>오늘 할 일</title>
-  <style>
-    :root{
-      --bg1:#0f172a;
-      --bg2:#1e293b;
-      --card:#0b1220cc;
-      --text:#e5e7eb;
-      --muted:#9ca3af;
-      --line:#334155;
-      --shadow: 0 12px 40px rgba(0,0,0,.35);
-      --radius: 18px;
+<div>Teachable Machine Image Model</div>
+<button type="button" onclick="init()">Start</button>
+<div id="webcam-container"></div>
+<div id="label-container"></div>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
+<script type="text/javascript">
+    // More API functions here:
+    // https://github.com/googlecreativelab/teachablemachine-community/tree/master/libraries/image
+
+    // the link to your model provided by Teachable Machine export panel
+    const URL = "./my_model/";
+
+    let model, webcam, labelContainer, maxPredictions;
+
+    // Load the image model and setup the webcam
+    async function init() {
+        const modelURL = URL + "model.json";
+        const metadataURL = URL + "metadata.json";
+
+        // load the model and metadata
+        // Refer to tmImage.loadFromFiles() in the API to support files from a file picker
+        // or files from your local hard drive
+        // Note: the pose library adds "tmImage" object to your window (window.tmImage)
+        model = await tmImage.load(modelURL, metadataURL);
+        maxPredictions = model.getTotalClasses();
+
+        // Convenience function to setup a webcam
+        const flip = true; // whether to flip the webcam
+        webcam = new tmImage.Webcam(200, 200, flip); // width, height, flip
+        await webcam.setup(); // request access to the webcam
+        await webcam.play();
+        window.requestAnimationFrame(loop);
+
+        // append elements to the DOM
+        document.getElementById("webcam-container").appendChild(webcam.canvas);
+        labelContainer = document.getElementById("label-container");
+        for (let i = 0; i < maxPredictions; i++) { // and class labels
+            labelContainer.appendChild(document.createElement("div"));
+        }
     }
 
-    *{ box-sizing:border-box; }
-    body{
-      margin:0;
-      font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans KR", Arial, "Apple SD Gothic Neo";
-      color:var(--text);
-      min-height:100vh;
-      display:flex;
-      align-items:center;
-      justify-content:center;
-      padding:28px;
-      background:
-        radial-gradient(1000px 500px at 15% 10%, rgba(56,189,248,.25), transparent 60%),
-        radial-gradient(900px 520px at 85% 20%, rgba(167,139,250,.22), transparent 55%),
-        radial-gradient(800px 520px at 50% 90%, rgba(34,197,94,.15), transparent 55%),
-        linear-gradient(140deg, var(--bg1), var(--bg2));
+    async function loop() {
+        webcam.update(); // update the webcam frame
+        await predict();
+        window.requestAnimationFrame(loop);
     }
 
-    .app{
-      width:min(560px, 100%);
-      background:var(--card);
-      backdrop-filter: blur(10px);
-      border:1px solid rgba(148,163,184,.18);
-      box-shadow: var(--shadow);
-      border-radius: var(--radius);
-      overflow:hidden;
+    // run the webcam image through the image model
+    async function predict() {
+        // predict can take in an image, video or canvas html element
+        const prediction = await model.predict(webcam.canvas);
+        for (let i = 0; i < maxPredictions; i++) {
+            const classPrediction =
+                prediction[i].className + ": " + prediction[i].probability.toFixed(2);
+            labelContainer.childNodes[i].innerHTML = classPrediction;
+        }
     }
-
-    header{
-      padding:22px 22px 14px;
-      border-bottom: 1px solid rgba(148,163,184,.14);
-    }
-    h1{
-      margin:0 0 6px;
-      font-size:20px;
-      letter-spacing:-.2px;
-    }
-    .sub{
-      margin:0;
-      color:var(--muted);
-      font-size:13px;
-    }
-
-    .composer{
-      display:flex;
-      gap:10px;
-      padding:18px 22px 16px;
-    }
-    .input{
-      flex:1;
-      background:rgba(15,23,42,.6);
-      border:1px solid rgba(148,163,184,.18);
-      color:var(--text);
-      padding:12px 12px;
-      border-radius: 14px;
-      outline:none;
-    }
-    .input::placeholder{ color: rgba(229,231,235,.55); }
-    .input:focus{
-      border-color: rgba(56,189,248,.55);
-      box-shadow: 0 0 0 4px rgba(56,189,248,.12);
-    }
-
-    .btn{
-      border:0;
-      color:#06101b;
-      padding:12px 14px;
-      border-radius: 14px;
-      cursor:pointer;
-      font-weight:700;
-      letter-spacing:-.2px;
-      background: linear-gradient(135deg, #38bdf8, #a78bfa);
-      box-shadow: 0 10px 22px rgba(56,189,248,.12);
-      transition: transform .08s ease, filter .12s ease;
-      white-space:nowrap;
-    }
-    .btn:active{ transform: translateY(1px); }
-    .btn:hover{ filter: brightness(1.05); }
-
-    .meta{
-      display:flex;
-      align-items:center;
-      justify-content:space-between;
-      padding:0 22px 14px;
-      color:var(--muted);
-      font-size:12px;
-    }
-    .clear{
-      border:1px solid rgba(148,163,184,.20);
-      color:var(--text);
-      background:rgba(15,23,42,.35);
-      padding:8px 10px;
-      border-radius: 12px;
-      cursor:pointer;
-      transition: background .12s ease, border-color .12s ease;
-    }
-    .clear:hover{
-      background:rgba(15,23,42,.55);
-      border-color: rgba(148,163,184,.35);
-    }
-
-    ul{
-      list-style:none;
-      margin:0;
-      padding: 6px 12px 16px;
-    }
-
-    .item{
-      display:flex;
-      align-items:center;
-      gap:12px;
-      padding: 12px 12px;
-      margin: 8px 10px;
-      border-radius: 14px;
-      border: 1px solid rgba(148,163,184,.14);
-      background: rgba(2,6,23,.35);
-      transition: transform .12s ease, opacity .22s ease, height .22s ease, margin .22s ease, padding .22s ease;
-      overflow:hidden;
-    }
-
-    .check{
-      width:22px;
-      height:22px;
-      border-radius: 8px;
-      border: 1px solid rgba(148,163,184,.35);
-      background: rgba(15,23,42,.65);
-      display:grid;
-      place-items:center;
-      cursor:pointer;
-      flex: 0 0 auto;
-    }
-
-    .check::after{
-      content:"";
-      width:10px;
-      height:6px;
-      border-left: 2px solid transparent;
-      border-bottom: 2px solid transparent;
-      transform: rotate(-45deg);
-      opacity:0;
-      transition: opacity .12s ease;
-    }
-
-    .text{
-      flex:1;
-      line-height:1.2;
-      word-break:break-word;
-      font-size:14px;
-    }
-
-    .remove{
-      border:0;
-      color: rgba(229,231,235,.65);
-      background: transparent;
-      cursor:pointer;
-      padding:8px 10px;
-      border-radius: 12px;
-      transition: background .12s ease, color .12s ease;
-      flex: 0 0 auto;
-    }
-    .remove:hover{
-      background: rgba(148,163,184,.10);
-      color: rgba(229,231,235,.9);
-    }
-
-    /* 체크하면 사라지는 애니메이션 */
-    .item.done{
-      opacity:0;
-      transform: translateY(-6px);
-      height:0;
-      margin:0 10px;
-      padding:0 12px;
-      border-width:0;
-    }
-
-    footer{
-      padding: 0 22px 18px;
-      color: rgba(229,231,235,.55);
-      font-size: 11px;
-    }
-  </style>
-</head>
-
-<body>
-  <main class="app" role="application" aria-label="오늘 할 일">
-    <header>
-      <h1>오늘 할 일</h1>
-      <p class="sub">체크하면 목록에서 자동으로 사라집니다.</p>
-    </header>
-
-    <section class="composer" aria-label="할 일 입력">
-      <input id="todoInput" class="input" placeholder="예: 보고서 1p 작성, 팀 미팅 준비…" maxlength="120" />
-      <button id="addBtn" class="btn">추가</button>
-    </section>
-
-    <div class="meta">
-      <span id="countText">0개</span>
-      <button id="clearBtn" class="clear" title="전체 삭제">전체 삭제</button>
-    </div>
-
-    <ul id="list" aria-label="할 일 목록"></ul>
-
-    <footer>저장: 브라우저 로컬 저장소(localStorage)</footer>
-  </main>
-
-  <script>
-    const STORAGE_KEY = "today_todos_v1";
-
-    const $input = document.getElementById("todoInput");
-    const $add = document.getElementById("addBtn");
-    const $list = document.getElementById("list");
-    const $count = document.getElementById("countText");
-    const $clear = document.getElementById("clearBtn");
-
-    /** @type {{id:string, text:string, createdAt:number}[]} */
-    let todos = load();
-
-    function save(){
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(todos));
-      renderCount();
-    }
-
-    function load(){
-      try{
-        const raw = localStorage.getItem(STORAGE_KEY);
-        const parsed = raw ? JSON.parse(raw) : [];
-        return Array.isArray(parsed) ? parsed : [];
-      }catch{
-        return [];
-      }
-    }
-
-    function uid(){
-      return String(Date.now()) + "_" + Math.random().toString(16).slice(2);
-    }
-
-    function addTodo(text){
-      const clean = text.trim();
-      if(!clean) return;
-      todos.unshift({ id: uid(), text: clean, createdAt: Date.now() });
-      save();
-      render();
-    }
-
-    function removeTodo(id){
-      todos = todos.filter(t => t.id !== id);
-      save();
-    }
-
-    function renderCount(){
-      $count.textContent = `${todos.length}개`;
-    }
-
-    function render(){
-      $list.innerHTML = "";
-      for(const t of todos){
-        const li = document.createElement("li");
-        li.className = "item";
-        li.dataset.id = t.id;
-
-        const check = document.createElement("button");
-        check.className = "check";
-        check.type = "button";
-        check.ariaLabel = "완료";
-
-        const text = document.createElement("div");
-        text.className = "text";
-        text.textContent = t.text;
-
-        const remove = document.createElement("button");
-        remove.className = "remove";
-        remove.type = "button";
-        remove.textContent = "삭제";
-        remove.ariaLabel = "삭제";
-
-        // 체크하면 사라지고 실제 데이터 삭제
-        check.addEventListener("click", () => {
-          li.classList.add("done");
-          // 애니메이션 끝난 뒤 삭제
-          setTimeout(() => {
-            removeTodo(t.id);
-            render();
-          }, 230);
-        });
-
-        // 삭제 버튼 (즉시)
-        remove.addEventListener("click", () => {
-          li.classList.add("done");
-          setTimeout(() => {
-            removeTodo(t.id);
-            render();
-          }, 230);
-        });
-
-        li.append(check, text, remove);
-        $list.appendChild(li);
-      }
-      renderCount();
-    }
-
-    // Enter로 추가
-    $input.addEventListener("keydown", (e) => {
-      if(e.key === "Enter"){
-        addTodo($input.value);
-        $input.value = "";
-      }
-    });
-
-    $add.addEventListener("click", () => {
-      addTodo($input.value);
-      $input.value = "";
-      $input.focus();
-    });
-
-    $clear.addEventListener("click", () => {
-      todos = [];
-      save();
-      render();
-    });
-
-    // 초기 렌더
-    render();
-  </script>
-</body>
-</html>
+</script>
